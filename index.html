@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes">
+    <title>URClapSpeller · responsive</title>
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+            background: #1e2b3a;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 8px;
+        }
+        #root {
+            width: 100%;
+            max-width: 1600px;
+            background: #0f1a24;
+            border-radius: 2rem;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+            padding: clamp(0.8rem, 3vw, 1.5rem);
+        }
+        /* responsive matrix grid */
+        .matrix-container {
+            background: #102330;
+            padding: clamp(0.5rem, 2vw, 1rem);
+            border-radius: 32px;
+        }
+        .matrix-row {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: clamp(4px, 1.5vw, 8px);
+            margin-bottom: clamp(4px, 1.5vw, 8px);
+        }
+        .matrix-cell {
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 20px;
+            font-weight: normal;
+            text-align: center;
+            word-break: break-word;
+            cursor: pointer;
+            transition: 0.1s;
+            font-size: clamp(1.2rem, 5vw, 2.2rem);
+            padding: 0 2px;
+            user-select: none;
+            touch-action: manipulation;
+        }
+        .matrix-cell.function {
+            font-size: clamp(0.8rem, 3.5vw, 1.2rem);
+            font-weight: bold;
+        }
+        /* responsive layout for main columns */
+        .main-panel {
+            display: flex;
+            gap: clamp(1rem, 3vw, 1.5rem);
+            flex-wrap: wrap;
+        }
+        .left-panel {
+            flex: 2;
+            min-width: 300px;
+        }
+        .right-panel {
+            flex: 1;
+            min-width: 260px;
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+        }
+        /* sentence bar */
+        .sentence-bar {
+            margin: 1rem 0;
+            background: #07121e;
+            border-radius: 30px;
+            padding: 0.8rem 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+        }
+        .sentence-text {
+            flex: 1;
+            word-break: break-word;
+            font-size: clamp(1rem, 4vw, 1.4rem);
+        }
+        /* control grid */
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            background: #152a3a;
+            border-radius: 30px;
+            padding: 1rem;
+        }
+        .control-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .status-bar {
+            grid-column: span 2;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .action-log {
+            grid-column: span 2;
+            background: #0f2633;
+            border-radius: 20px;
+            padding: 0.3rem 1rem;
+            font-size: 0.95rem;
+        }
+        button {
+            background: #334e6e;
+            border: none;
+            color: white;
+            border-radius: 20px;
+            padding: 0.4rem 1rem;
+            font-size: clamp(0.8rem, 3vw, 1rem);
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        button.primary {
+            background: #5885b0;
+        }
+        button.warning {
+            background: #642c3c;
+        }
+        input[type=range] {
+            width: 100%;
+            cursor: pointer;
+        }
+        .light-indicator {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #555;
+            box-shadow: none;
+        }
+        .light-indicator.on {
+            background: #ffffaa;
+            box-shadow: 0 0 10px yellow;
+        }
+        canvas {
+            width: 100%;
+            height: auto;
+            background: #1a3040;
+            border-radius: 16px;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 1rem;
+        }
+        .modal-content {
+            background: #1f3a4b;
+            color: white;
+            padding: 2rem;
+            border-radius: 40px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 40px black;
+            border: 2px solid #7aa5c2;
+        }
+        .modal-content button {
+            background: #5885b0;
+            font-size: 1.2rem;
+            padding: 0.5rem 2rem;
+            margin-top: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // ========== Responsive URClapSpeller ==========
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // --- microphone hook (unchanged) ---
+        const useClapDetector = (threshold, onClapDetected) => {
+            const thresholdRef = useRef(threshold);
+            const onClapDetectedRef = useRef(onClapDetected);
+            useEffect(() => { thresholdRef.current = threshold; }, [threshold]);
+            useEffect(() => { onClapDetectedRef.current = onClapDetected; }, [onClapDetected]);
+
+            const audioContextRef = useRef(null);
+            const analyserRef = useRef(null);
+            const mediaStreamRef = useRef(null);
+            const animationRef = useRef(null);
+
+            const [waveform, setWaveform] = useState(new Array(60).fill(0));
+            const [spectrumHistory, setSpectrumHistory] = useState(() => 
+                Array.from({ length: 60 }, () => new Array(32).fill(0))
+            );
+            const [dB, setDB] = useState(-100);
+            const [clapFlag, setClapFlag] = useState(false);
+            const lastClapTimeRef = useRef(0);
+            const frameCountRef = useRef(0);
+            const SLOW_FACTOR = 8;
+
+            useEffect(() => {
+                let mounted = true;
+                const initAudio = async () => {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        if (!mounted) { stream.getTracks().forEach(t => t.stop()); return; }
+                        mediaStreamRef.current = stream;
+
+                        const AudioContext = window.AudioContext || window.webkitAudioContext;
+                        const ctx = new AudioContext();
+                        if (ctx.state === 'suspended') await ctx.resume();
+                        audioContextRef.current = ctx;
+
+                        const analyser = ctx.createAnalyser();
+                        analyser.fftSize = 256;
+                        analyser.smoothingTimeConstant = 0.2;
+                        analyserRef.current = analyser;
+
+                        const source = ctx.createMediaStreamSource(stream);
+                        source.connect(analyser);
+
+                        const update = () => {
+                            if (!analyserRef.current) return;
+                            const analyser = analyserRef.current;
+                            const freqData = new Uint8Array(analyser.frequencyBinCount);
+                            const timeData = new Uint8Array(analyser.fftSize);
+
+                            analyser.getByteTimeDomainData(timeData);
+                            analyser.getByteFrequencyData(freqData);
+
+                            const wave = new Array(60);
+                            for (let i = 0; i < 60; i++) {
+                                const idx = Math.floor(i * timeData.length / 60);
+                                wave[i] = (timeData[idx] - 128) / 128;
+                            }
+                            setWaveform(wave);
+
+                            let rms = 0;
+                            for (let i = 0; i < timeData.length; i++) {
+                                const f = (timeData[i] - 128) / 128;
+                                rms += f * f;
+                            }
+                            rms = Math.sqrt(rms / timeData.length);
+                            const dbValue = 20 * Math.log10(rms + 1e-6);
+                            setDB(dbValue);
+
+                            const now = Date.now();
+                            if (dbValue > thresholdRef.current && (now - lastClapTimeRef.current) > 350) {
+                                lastClapTimeRef.current = now;
+                                setClapFlag(true);
+                                setTimeout(() => setClapFlag(false), 150);
+                                if (onClapDetectedRef.current) onClapDetectedRef.current();
+                            }
+
+                            frameCountRef.current += 1;
+                            if (frameCountRef.current % SLOW_FACTOR === 0) {
+                                const spec = new Array(32);
+                                for (let i = 0; i < 32; i++) {
+                                    const start = Math.floor(i * freqData.length / 32);
+                                    const end = Math.floor((i + 1) * freqData.length / 32);
+                                    let sum = 0;
+                                    for (let j = start; j < end; j++) sum += freqData[j];
+                                    spec[i] = sum / (end - start) / 255;
+                                }
+                                setSpectrumHistory(prev => [...prev.slice(1), spec]);
+                            }
+
+                            animationRef.current = requestAnimationFrame(update);
+                        };
+
+                        update();
+                    } catch (err) {
+                        console.warn('Microphone error:', err);
+                        alert('Please allow microphone access for clap detection.');
+                    }
+                };
+
+                initAudio();
+
+                return () => {
+                    mounted = false;
+                    if (animationRef.current) cancelAnimationFrame(animationRef.current);
+                    if (mediaStreamRef.current) {
+                        mediaStreamRef.current.getTracks().forEach(t => t.stop());
+                        mediaStreamRef.current = null;
+                    }
+                    if (audioContextRef.current) {
+                        audioContextRef.current.close();
+                        audioContextRef.current = null;
+                    }
+                    analyserRef.current = null;
+                };
+            }, []);
+
+            return { waveform, spectrumHistory, dB, clapFlag };
+        };
+
+        // --- medical alert (unchanged) ---
+        const playMedicalAlert = (durationSec) => {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const startTime = audioCtx.currentTime;
+                const endTime = startTime + durationSec;
+                const beepFreq = 950;
+                const onDuration = 0.1;
+                const offDuration = 0.1;
+
+                let time = startTime;
+                while (time < endTime) {
+                    for (let i = 0; i < 5; i++) {
+                        scheduleBeep(audioCtx, beepFreq, time, onDuration);
+                        time += onDuration + offDuration;
+                        if (time >= endTime) break;
+                    }
+                    time += 0.3;
+                }
+
+                setTimeout(() => {
+                    if (audioCtx.state !== 'closed') audioCtx.close();
+                }, durationSec * 1000 + 500);
+            } catch (e) {
+                console.warn('Alert sound failed', e);
+            }
+        };
+
+        const scheduleBeep = (ctx, freq, startTime, duration) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.2, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(startTime);
+            osc.stop(startTime + duration);
+        };
+
+        // --- main app ---
+        const SpellerApp = () => {
+            const letters = [
+                ['A','B','C','D','E','F'],
+                ['G','H','I','J','K','L'],
+                ['M','N','O','P','Q','R'],
+                ['S','T','U','V','W','X'],
+                ['Y','Z','.','?','!',' '],
+                ['Bckspc','Clear','Talk','Alert','Light','SMS']
+            ];
+            const rows = letters.length;
+            const cols = letters[0].length;
+
+            const [scanningEnabled, setScanningEnabled] = useState(true);
+            const [scanSpeed, setScanSpeed] = useState(2000);
+            const [clapThreshold, setClapThreshold] = useState(-10);
+            const [selectedRow, setSelectedRow] = useState(null);
+            const [phase, setPhase] = useState('row');
+            const [highlightedRow, setHighlightedRow] = useState(0);
+            const [highlightedCol, setHighlightedCol] = useState(0);
+            const [outputText, setOutputText] = useState('');
+            const [lastAction, setLastAction] = useState('');
+
+            const [alertDuration, setAlertDuration] = useState(5);
+            const [lightOn, setLightOn] = useState(false);
+            const [showSmsModal, setShowSmsModal] = useState(false);
+            const [smsMessage, setSmsMessage] = useState('');
+
+            const selectionLockRef = useRef(false);
+
+            const executeFunction = (col, cell) => {
+                switch (col) {
+                    case 0: // Backspace
+                        setOutputText(prev => prev.slice(0, -1));
+                        setLastAction('Backspace');
+                        break;
+                    case 1: // Clear
+                        setOutputText('');
+                        setLastAction('Cleared all text');
+                        break;
+                    case 2: // Talk
+                        if (outputText.trim() !== '') {
+                            const utterance = new SpeechSynthesisUtterance(outputText);
+                            window.speechSynthesis.cancel();
+                            window.speechSynthesis.speak(utterance);
+                            setLastAction(`Speaking: "${outputText}"`);
+                        } else {
+                            setLastAction('Nothing to speak');
+                        }
+                        break;
+                    case 3: // Alert
+                        setLastAction(`Alert for ${alertDuration}s`);
+                        playMedicalAlert(alertDuration);
+                        break;
+                    case 4: // Light
+                        setLightOn(prev => !prev);
+                        setLastAction(`Light toggled ${!lightOn ? 'ON' : 'OFF'}`);
+                        break;
+                    case 5: // SMS
+                        if (outputText.trim() !== '') {
+                            setSmsMessage(outputText);
+                            setShowSmsModal(true);
+                            setScanningEnabled(false);
+                            setLastAction(`SMS popup: "${outputText}"`);
+                        } else {
+                            alert('No message to send.');
+                            setLastAction('SMS failed: empty');
+                        }
+                        break;
+                    default:
+                        setLastAction('(empty)');
+                        break;
+                }
+            };
+
+            const handleCellClick = (row, col) => {
+                const cell = letters[row][col];
+                if (row === 5) {
+                    executeFunction(col, cell);
+                } else {
+                    setOutputText(prev => prev + cell);
+                    setLastAction(`letter '${cell}' (click)`);
+                }
+                setPhase('row');
+                setSelectedRow(null);
+                setHighlightedRow(0);
+            };
+
+            const handleClap = useCallback(() => {
+                if (showSmsModal) {
+                    setShowSmsModal(false);
+                    setScanningEnabled(true);
+                    setLastAction('SMS popup closed by clap');
+                    return;
+                }
+                if (!scanningEnabled) return;
+                if (selectionLockRef.current) return;
+                selectionLockRef.current = true;
+
+                if (phase === 'row') {
+                    const rowIdx = highlightedRow;
+                    setSelectedRow(rowIdx);
+                    setPhase('col');
+                    setHighlightedCol(0);
+                    setLastAction(`row ${rowIdx} selected (clap)`);
+                } else {
+                    if (selectedRow !== null) {
+                        const row = selectedRow;
+                        const col = highlightedCol;
+                        const cell = letters[row][col];
+                        if (row === 5) {
+                            executeFunction(col, cell);
+                        } else {
+                            setOutputText(prev => prev + cell);
+                            setLastAction(`letter '${cell}' (clap)`);
+                        }
+                        setPhase('row');
+                        setSelectedRow(null);
+                        setHighlightedRow(0);
+                    } else {
+                        setPhase('row');
+                        setSelectedRow(null);
+                        setHighlightedRow(0);
+                    }
+                }
+                setTimeout(() => { selectionLockRef.current = false; }, 300);
+            }, [scanningEnabled, phase, highlightedRow, highlightedCol, selectedRow, letters, outputText, alertDuration, lightOn, showSmsModal]);
+
+            const { waveform, spectrumHistory, dB, clapFlag } = useClapDetector(clapThreshold, handleClap);
+
+            useEffect(() => {
+                if (!scanningEnabled || showSmsModal) return;
+                const timer = setInterval(() => {
+                    if (phase === 'row') {
+                        setHighlightedRow(prev => (prev + 1) % rows);
+                    } else {
+                        setHighlightedCol(prev => (prev + 1) % cols);
+                    }
+                }, scanSpeed);
+                return () => clearInterval(timer);
+            }, [scanningEnabled, phase, scanSpeed, rows, cols, showSmsModal]);
+
+            const resetMatrix = () => {
+                setPhase('row');
+                setSelectedRow(null);
+                setHighlightedRow(0);
+                setHighlightedCol(0);
+                setLastAction('matrix reset');
+            };
+            const clearText = () => setOutputText('');
+
+            const waveCanvasRef = useRef(null);
+            const scrollSpecCanvasRef = useRef(null);
+
+            useEffect(() => {
+                const canvas = waveCanvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                const w = canvas.width, h = canvas.height;
+                ctx.clearRect(0, 0, w, h);
+                ctx.strokeStyle = '#7bc5f5';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                const mid = h / 2;
+                for (let i = 0; i < waveform.length; i++) {
+                    const x = (i / (waveform.length - 1)) * w;
+                    const y = mid + waveform[i] * (h * 0.4);
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+
+                const minDb = -50, maxDb = 10;
+                let yThresh = h - ((clapThreshold - minDb) / (maxDb - minDb)) * h;
+                yThresh = Math.min(h, Math.max(0, yThresh));
+                ctx.beginPath();
+                ctx.strokeStyle = '#ffaa33';
+                ctx.setLineDash([5, 3]);
+                ctx.moveTo(0, yThresh);
+                ctx.lineTo(w, yThresh);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.fillStyle = '#ffaa33';
+                ctx.font = '10px monospace';
+                ctx.fillText(`thr ${clapThreshold.toFixed(1)} dB`, 5, yThresh-5);
+            }, [waveform, clapThreshold]);
+
+            useEffect(() => {
+                const canvas = scrollSpecCanvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                const w = canvas.width, h = canvas.height;
+                const colWidth = w / spectrumHistory.length;
+                spectrumHistory.forEach((col, colIdx) => {
+                    const x = colIdx * colWidth;
+                    for (let band = 0; band < 32; band++) {
+                        const val = col[band];
+                        const yStart = h - (band+1) * h/32;
+                        const yEnd = h - band * h/32;
+                        const hue = 240 * (1 - val);
+                        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+                        ctx.fillRect(x, yStart, colWidth-1, Math.max(1, yEnd - yStart));
+                    }
+                });
+            }, [spectrumHistory]);
+
+            return (
+                <div style={{ color: '#e3f2fd' }}>
+                    <h2 style={{ margin: '0 0 1rem 0', fontSize: 'clamp(1.2rem, 5vw, 2rem)' }}>
+                        🧑‍🏫 URClapSpeller by URATech - 👏-👏-👏
+                    </h2>
+                    <div className="main-panel">
+                        {/* LEFT PANEL */}
+                        <div className="left-panel">
+                            <div className="matrix-container">
+                                {letters.map((row, rIdx) => (
+                                    <div key={rIdx} className="matrix-row">
+                                        {row.map((char, cIdx) => {
+                                            const isRowPhase = phase === 'row';
+                                            const isColPhase = phase === 'col';
+                                            let highlight = false;
+                                            let extraFaint = false;
+                                            if (isRowPhase && rIdx === highlightedRow) highlight = true;
+                                            if (isColPhase && cIdx === highlightedCol && selectedRow === rIdx) highlight = true;
+                                            if (isColPhase && selectedRow === rIdx && cIdx !== highlightedCol) extraFaint = true;
+                                            const isFunctionRow = rIdx === 5;
+                                            const bgColor = highlight ? '#f5b342' : (extraFaint ? '#3f5f8c' : (isFunctionRow ? '#2a4a6a' : '#1e3347'));
+                                            return (
+                                                <div
+                                                    key={cIdx}
+                                                    className={`matrix-cell ${isFunctionRow ? 'function' : ''}`}
+                                                    onClick={() => handleCellClick(rIdx, cIdx)}
+                                                    style={{
+                                                        background: bgColor,
+                                                        color: highlight ? '#0a0f1a' : (isFunctionRow ? '#f0e68c' : '#bdd4f0'),
+                                                        boxShadow: highlight ? '0 0 20px gold' : (extraFaint ? 'inset 0 0 0 2px #5f8fd0' : 'none')
+                                                    }}
+                                                >
+                                                    {char}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="sentence-bar">
+                                <strong>📝</strong>
+                                <span className="sentence-text">{outputText || '—'}</span>
+                                <button onClick={clearText}>Clear Text</button>
+                                <button onClick={resetMatrix}>Reset Matrix</button>
+                            </div>
+
+                            <div className="controls-grid">
+                                <div className="control-item">
+                                    <label>⏱️ Scan {scanSpeed} ms</label>
+                                    <input type="range" min="100" max="10000" value={scanSpeed} onChange={e => setScanSpeed(Number(e.target.value))} />
+                                </div>
+                                <div className="control-item">
+                                    <label>👏 Threshold {clapThreshold} dB</label>
+                                    <input type="range" min="-40" max="10" step="0.5" value={clapThreshold} onChange={e => setClapThreshold(Number(e.target.value))} />
+                                </div>
+                                <div className="control-item">
+                                    <label>🔔 Alert {alertDuration}s</label>
+                                    <input type="range" min="1" max="30" step="1" value={alertDuration} onChange={e => setAlertDuration(Number(e.target.value))} />
+                                </div>
+                                <div className="control-item" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span>💡 Light:</span>
+                                    <span className={`light-indicator ${lightOn ? 'on' : ''}`}></span>
+                                    <span>{lightOn ? 'ON' : 'OFF'}</span>
+                                </div>
+                                <div className="status-bar">
+                                    <span>⚡ Phase: <span style={{ color: '#ffb86b' }}>{phase}</span></span>
+                                    <span>🎤 {dB.toFixed(1)} dB</span>
+                                    <span style={{ color: clapFlag ? 'lime' : '#aaa' }}>{clapFlag ? '💥 CLAP' : '⋯'}</span>
+                                    <button onClick={() => setScanningEnabled(!scanningEnabled)} className={scanningEnabled ? 'primary' : 'warning'}>
+                                        {scanningEnabled ? 'Pause' : 'Resume'}
+                                    </button>
+                                </div>
+                                <div className="action-log">
+                                    {lastAction && <span>✨ {lastAction}</span>}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* RIGHT PANEL */}
+                        <div className="right-panel">
+                            <div style={{ background: '#102a36', borderRadius: 30, padding: '1rem' }}>
+                                <h4 style={{ margin: '0 0 0.5rem' }}>🌊 Waveform + Threshold</h4>
+                                <canvas ref={waveCanvasRef} width="350" height="130" style={{ width: '100%', height: 'auto', aspectRatio: '350/130' }}></canvas>
+                            </div>
+                            <div style={{ background: '#102a36', borderRadius: 30, padding: '1rem' }}>
+                                <h4 style={{ margin: '0 0 0.5rem' }}>📜 Spectrogram (HSL)</h4>
+                                <canvas ref={scrollSpecCanvasRef} width="350" height="160" style={{ width: '100%', height: 'auto', aspectRatio: '350/160' }}></canvas>
+                                <div style={{ fontSize: '0.8rem', marginTop: 5, color: '#aaa' }}>freq ↑ · time → (slow scroll)</div>
+                            </div>
+                            <div style={{ background: '#102a36', borderRadius: 30, padding: '1rem' }}>
+                                <p><strong>✅ Updates:</strong> fully responsive, touch-friendly, medical alarm, SMS popup closes with clap.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* SMS Modal */}
+                    {showSmsModal && (
+                        <div className="modal-overlay" onClick={() => { setShowSmsModal(false); setScanningEnabled(true); }}>
+                            <div className="modal-content" onClick={e => e.stopPropagation()}>
+                                <h2>📨 SMS Sent</h2>
+                                <p style={{ fontSize: '1.4rem', background: '#0f2633', padding: '1rem', borderRadius: 20 }}>
+                                    {smsMessage}
+                                </p>
+                                <p>Message has been sent to +1234567890 (simulated).</p>
+                                <button onClick={() => { setShowSmsModal(false); setScanningEnabled(true); }}>
+                                    Close (click or clap)
+                                </button>
+                                <p style={{ marginTop: '1rem', fontSize: '0.9rem' }}>👏 clap anywhere to close</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<SpellerApp />);
+    </script>
+</body>
+</html>
